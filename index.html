@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reaction Diffusion</title>
+  <style>
+    body {
+      width: 100%;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+</body>
+<script>
+  const DIFF_A = 1;
+  const DIFF_B = .5;
+  const FEED_RATE = 0.035;
+  const KILL_RATE = 0.058;
+  const SIZE = 400;
+  let A = [], B = [], A_NEXT = [], B_NEXT = [];
+  let lastUpdateTime = new Date().getTime();
+
+  const displayCanvas = document.getElementById('canvas');
+  const displayCtx = displayCanvas.getContext('2d');
+  const canvas = document.createElement('canvas');
+  canvas.width = SIZE;
+  canvas.height = SIZE;
+  const ctx = canvas.getContext('2d');
+
+  init();
+  drawFrame();
+
+  function init() {
+    for (let i = 0; i < SIZE; i++) {
+      A[i] = [];
+      B[i] = [];
+      A_NEXT[i] = [];
+      B_NEXT[i] = [];
+
+      for (let j = 0; j < SIZE; j++) {
+        const isB = Math.random() < .01;
+        A[i][j] = +!isB;
+        B[i][j] = +isB;
+        A_NEXT[i][j] = B_NEXT[i][j] = 0;
+      }
+    }
+  }
+
+  function drawFrame() {
+    let imageData;
+    const currentTime = new Date().getTime();
+    const shouldUpdateUI = currentTime - lastUpdateTime > 100;
+    if (shouldUpdateUI) imageData = ctx.getImageData(0, 0, SIZE, SIZE);
+
+
+    for (let i = 0; i < SIZE; i++) {
+      for (let j = 0; j < SIZE; j++) {
+        applyDiffusion(A, A_NEXT, DIFF_A, i, j);
+
+        A_NEXT[i][j] -= A[i][j] * B[i][j] ** 2;
+        A_NEXT[i][j] += FEED_RATE * (1 - A[i][j]);
+
+        applyDiffusion(B, B_NEXT, DIFF_B, i, j);
+
+        B_NEXT[i][j] += A[i][j] * B[i][j] ** 2;
+        B_NEXT[i][j] -= (FEED_RATE+KILL_RATE)*B[i][j];
+
+        if(shouldUpdateUI) {
+          const dataIdx = (i*SIZE+j) * 4;
+          imageData.data[dataIdx] = A_NEXT[i][j] * 255;
+          imageData.data[dataIdx + 1] = A_NEXT[i][j] * 255;
+          imageData.data[dataIdx + 2] = A_NEXT[i][j] * 255;
+          imageData.data[dataIdx + 3] = 255;
+        }
+      }
+    }
+
+    A = A_NEXT.map(x => [...x]);
+    B = B_NEXT.map(x => [...x]);
+
+    if(shouldUpdateUI) {
+      ctx.putImageData(imageData, 0, 0);
+      displayCanvas.width = displayCanvas.offsetWidth;
+      displayCanvas.height = displayCanvas.offsetHeight;
+
+      for (let i=0; i<displayCanvas.width; i+=SIZE) {
+        for(let j=0; j<displayCanvas.height; j+= SIZE) {
+          displayCtx.drawImage(canvas, i, j, SIZE, SIZE);
+        }
+      }
+
+      lastUpdateTime = currentTime;
+    }
+
+    requestAnimationFrame(drawFrame);
+  }
+
+  function getIndex(idx) {
+    return (idx + SIZE) % SIZE;
+  }
+
+  function getDiagCells(data, i, j) {
+    return data[getIndex(i - 1)][getIndex(j - 1)] + data[getIndex(i + 1)][getIndex(j - 1)] + data[getIndex(i - 1)][getIndex(j + 1)] + data[getIndex(i + 1)][getIndex(j + 1)];
+  }
+
+  function getNeighborCells(data, i, j) {
+    return data[getIndex(i)][getIndex(j - 1)] + data[getIndex(i)][getIndex(j + 1)] + data[getIndex(i - 1)][getIndex(j)] + data[getIndex(i + 1)][getIndex(j)];
+  }
+
+  function applyDiffusion(data, nextData, diffusionScale, i, j) {
+    nextData[i][j] = data[i][j];
+    nextData[i][j] += getDiagCells(data, i, j) * diffusionScale * .05;
+    nextData[i][j] += getNeighborCells(data, i, j) * diffusionScale * .2;
+    nextData[i][j] -= data[i][j] * diffusionScale;
+  }
+
+</script>
+</html>
